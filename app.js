@@ -1,14 +1,33 @@
 'use strict';
 
 var http = require('http');
-var https = require('https');
+var net = require('net');
 var urlParser = require('url');
 var fs = require('fs');
 
-function callback(req, res) {
-    var urlParts = urlParser.parse(req.url, true);
-    var reqHeaders = req.headers;
+var REGEX_HOST_PORT = /^([^:]+)(:([0-9]+))?$/;
 
+var getHostPortFromString = function (hostString, defaultPort) {
+    var host = hostString;
+    var port = defaultPort;
+
+    var result = REGEX_HOST_PORT.exec(hostString);
+    if (result != null) {
+        host = result[1];
+        if (result[2] != null) {
+            port = result[3];
+        }
+    }
+
+    return ([host, port]);
+};
+
+function requestHandler(req, res) {
+    var urlParts = urlParser.parse(req.url, true);
+
+    console.log(req.method, urlParts.pathname);
+
+    var reqHeaders = req.headers;
     var options = {
         hostname: reqHeaders.host,
         method: req.method,
@@ -19,16 +38,10 @@ function callback(req, res) {
     delete reqHeaders['user-agent'];
     options['headers'] = reqHeaders;
 
-    var targetProtocolModule;
-    if (urlParts.protocol === 'http:') {
-        targetProtocolModule = http;
-    } else {
-        targetProtocolModule = https;
-    }
-
-    var proxyReq = targetProtocolModule.request(options, function (targetRes) {
+    var proxyReq = http.request(options, function (targetRes) {
         res.statusCode = targetRes.statusCode;
 
+        // Log it
         res.setHeader('proxy-by', 'http-proxy-server');
 
         Object.getOwnPropertyNames(targetRes.headers).forEach(ele => {
@@ -61,8 +74,53 @@ function callback(req, res) {
         proxyReq.end();
     }
 }
-http.createServer(callback).listen(8080);
 
+function connectHandler(req, socket, headBody) {
+    var hostPort = getHostPortFromString(req.url, 443);
+    var host = hostPort[0];
+    var port = parseInt(hostPort[1]);
+
+    // Log it
+    console.log('CONNECT %s:%d', host, port);
+
+    var proxySocket = new net.Socket();
+    proxySocket.connect(port, host, function () {
+        proxySocket.write(headBody);
+        socket.write("HTTP/" + req.httpVersion + " 200 Connection established\r\n\r\n");
+    });
+
+    proxySocket.on('data', function (chunk) {
+        socket.write(chunk);
+    });
+
+    proxySocket.on('end', function () {
+        socket.end();
+    });
+
+    proxySocket.on('error', function () {
+        socket.write("HTTP/" + req.httpVersion + " 500 Connection error\r\n\r\n");
+        socket.end();
+    });
+
+    socket.on('data', function (chunk) {
+        proxySocket.write(chunk);
+    });
+
+    socket.on('end', function () {
+        proxySocket.end();
+    });
+
+    socket.on('error', function () {
+        proxySocket.end();
+    });
+}
+
+var proxyServer = http.createServer(requestHandler);
+proxyServer.listen(8080);
+// 监听HTTPS协议的CONNECT事件
+proxyServer.on('connect', connectHandler);
+
+// pac文件服务
 http.createServer(function (req, res) {
     var urlParts = urlParser.parse(req.url);
     if (urlParts.pathname === '/proxy_on.pac') {
