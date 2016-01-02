@@ -25,7 +25,7 @@ var parseHostAddress = function (hostAddress, defaultPort) {
 function requestHandler(req, res) {
     var urlParts = urlParser.parse(req.url, true);
 
-    console.log(req.method, urlParts.pathname);
+    console.log(req.method, req.url);
 
     var reqHeaders = req.headers;
     var options = {
