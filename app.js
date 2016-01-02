@@ -7,11 +7,11 @@ var fs = require('fs');
 
 var REGEX_HOST_PORT = /^([^:]+)(:([0-9]+))?$/;
 
-var getHostPortFromString = function (hostString, defaultPort) {
-    var host = hostString;
+var parseHostAddress = function (hostAddress, defaultPort) {
+    var host = hostAddress;
     var port = defaultPort;
 
-    var result = REGEX_HOST_PORT.exec(hostString);
+    var result = REGEX_HOST_PORT.exec(hostAddress);
     if (result != null) {
         host = result[1];
         if (result[2] != null) {
@@ -76,7 +76,7 @@ function requestHandler(req, res) {
 }
 
 function connectHandler(req, socket, headBody) {
-    var hostPort = getHostPortFromString(req.url, 443);
+    var hostPort = parseHostAddress(req.url, 443);
     var host = hostPort[0];
     var port = parseInt(hostPort[1]);
 
