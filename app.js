@@ -61,10 +61,7 @@ function callback(req, res) {
         proxyReq.end();
     }
 }
-
-var httpProxy = http.createServer(callback);
-
-httpProxy.listen(8080);
+http.createServer(callback).listen(8080);
 
 http.createServer(function (req, res) {
     var urlParts = urlParser.parse(req.url);
